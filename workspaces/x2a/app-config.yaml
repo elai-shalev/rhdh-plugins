@@ -1,0 +1,44 @@
+app:
+  title: X2A Development
+  baseUrl: http://localhost:3000
+
+organization:
+  name: Red Hat Developer Hub
+
+backend:
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+  cors:
+    origin: http://localhost:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  database:
+    client: better-sqlite3
+    connection: ':memory:'
+
+auth:
+  providers:
+    guest:
+      dangerouslyAllowOutsideDevelopment: true
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+  rules:
+    - allow: [Component, System, API, Resource, Location]
+  locations:
+    - type: file
+      target: ../../examples/entities.yaml
+
+# Kubernetes configuration
+# The X2A plugin will use the default kubeconfig or in-cluster configuration
+# You can override this by setting KUBECONFIG environment variable
+kubernetes:
+  serviceLocatorMethod:
+    type: 'multiTenant'
+  clusterLocatorMethods:
+    - type: 'config'
+      clusters: []

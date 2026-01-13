@@ -1,0 +1,23 @@
+dist
+dist-types
+node_modules
+.cache
+
+# msw
+public/mockServiceWorker.js
+
+*.local.yaml
+
+# Local Plugins
+plugins/*/dist
+plugins/*/node_modules
+
+# OS
+.DS_Store
+
+# IDE
+.idea
+.vscode/*.log
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
