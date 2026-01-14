@@ -18,8 +18,14 @@ import { LoggerService } from '@backstage/backend-plugin-api';
 import { Config } from '@backstage/config';
 import express from 'express';
 import Router from 'express-promise-router';
-import type { PodsListResponse, X2AErrorResponse } from '@red-hat-developer-hub/backstage-plugin-x2a-common';
+import type {
+  PodsListResponse,
+  X2AErrorResponse,
+  JobCreateRequest,
+  JobCreateResponse,
+} from '@red-hat-developer-hub/backstage-plugin-x2a-common';
 import { KubernetesService } from './KubernetesService';
+import { JobsService } from './JobsService';
 
 export interface RouterOptions {
   logger: LoggerService;
@@ -35,6 +41,7 @@ export async function createRouter(
   const { logger, config } = options;
 
   const k8sService = new KubernetesService(config, logger);
+  const jobsService = new JobsService(config, logger);
 
   const router = Router();
   router.use(express.json());
@@ -99,6 +106,43 @@ export async function createRouter(
       };
 
       return response.status(statusCode).json(errorResponse);
+    }
+  });
+
+  // Create a migration job
+  router.post('/jobs', async (request, response) => {
+    try {
+      const jobRequest: JobCreateRequest = request.body;
+
+      // Validate required fields
+      if (!jobRequest.phase || !jobRequest.name || !jobRequest.description) {
+        const errorResponse: X2AErrorResponse = {
+          error: 'Missing required fields: phase, name, description',
+        };
+        return response.status(400).json(errorResponse);
+      }
+
+      logger.info(`Creating ${jobRequest.phase} job: ${jobRequest.name}`);
+
+      const jobName = await jobsService.createJob(jobRequest);
+
+      const jobResponse: JobCreateResponse = {
+        jobName,
+        namespace: 'x2a',
+        phase: jobRequest.phase,
+        created: true,
+      };
+
+      return response.status(201).json(jobResponse);
+    } catch (error: any) {
+      logger.error(`Error creating job: ${error.message}`);
+
+      const errorResponse: X2AErrorResponse = {
+        error: 'Failed to create job',
+        details: error.message,
+      };
+
+      return response.status(500).json(errorResponse);
     }
   });
 

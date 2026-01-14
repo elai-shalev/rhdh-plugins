@@ -20,4 +20,11 @@
  * @packageDocumentation
  */
 
-export type { PodInfo, PodsListResponse, X2AErrorResponse } from './types';
+export type {
+  PodInfo,
+  PodsListResponse,
+  X2AErrorResponse,
+  MigrationPhase,
+  JobCreateRequest,
+  JobCreateResponse,
+} from './types';

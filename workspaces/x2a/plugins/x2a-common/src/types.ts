@@ -83,3 +83,68 @@ export interface X2AErrorResponse {
    */
   details?: string;
 }
+
+/**
+ * Migration phase types for x2a-convertor workflow
+ */
+export type MigrationPhase = 'init' | 'analyze' | 'migrate' | 'publish';
+
+/**
+ * Request to create a migration job
+ */
+export interface JobCreateRequest {
+  /**
+   * Migration phase to execute
+   */
+  phase: MigrationPhase;
+
+  /**
+   * Name for the migration job
+   */
+  name: string;
+
+  /**
+   * Description of what this job will do
+   */
+  description: string;
+
+  /**
+   * Module/cookbook name (for analyze, migrate, publish phases)
+   */
+  moduleName?: string;
+
+  /**
+   * Source technology being migrated from (for migrate phase)
+   */
+  sourceTechnology?: string;
+
+  /**
+   * GitHub owner for publishing (for publish phase)
+   */
+  githubOwner?: string;
+}
+
+/**
+ * Response from creating a job
+ */
+export interface JobCreateResponse {
+  /**
+   * Name of the created Kubernetes job
+   */
+  jobName: string;
+
+  /**
+   * Namespace where the job was created
+   */
+  namespace: string;
+
+  /**
+   * Migration phase of the job
+   */
+  phase: MigrationPhase;
+
+  /**
+   * Whether the job was successfully created
+   */
+  created: boolean;
+}

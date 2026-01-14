@@ -1,0 +1,49 @@
+# X2A POC Kubernetes Resources
+# Apply with: kubectl apply -f poc-resources.yaml
+
+---
+# Namespace for X2A resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: x2a
+  labels:
+    app: x2a
+    environment: poc
+
+---
+# PersistentVolumeClaim for source code shared across migration jobs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: x2a-source-pvc
+  namespace: x2a
+  labels:
+    app: x2a
+spec:
+  accessModes:
+    - ReadWriteOnce  # Jobs run sequentially, so RWO is sufficient
+  resources:
+    requests:
+      storage: 5Gi
+  # storageClassName is inherited from cluster default
+
+---
+# Secret for X2A credentials (AWS Bedrock and GitHub)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: x2a-secrets
+  namespace: x2a
+  labels:
+    app: x2a
+type: Opaque
+stringData:
+  # AWS Bedrock credentials for LLM access
+  # Replace with your actual values before applying
+  aws-region: "REPLACE_WITH_YOUR_AWS_REGION"  # e.g., us-east-1
+  aws-bearer-token: "REPLACE_WITH_YOUR_AWS_BEARER_TOKEN"  # Your AWS bearer token for Bedrock
+
+  # GitHub token for publishing (optional, only needed for publish phase)
+  # Uncomment and set if using the publish phase
+  # github-token: "REPLACE_WITH_YOUR_GITHUB_TOKEN"
