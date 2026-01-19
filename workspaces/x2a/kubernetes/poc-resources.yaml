@@ -1,15 +1,6 @@
 # X2A POC Kubernetes Resources
 # Apply with: kubectl apply -f poc-resources.yaml
-
----
-# Namespace for X2A resources
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: x2a
-  labels:
-    app: x2a
-    environment: poc
+# Note: Namespace 'rhdh' should be created by RHDH operator
 
 ---
 # PersistentVolumeClaim for source code shared across migration jobs
@@ -17,7 +8,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: x2a-source-pvc
-  namespace: x2a
+  namespace: rhdh
   labels:
     app: x2a
 spec:
@@ -29,21 +20,41 @@ spec:
   # storageClassName is inherited from cluster default
 
 ---
-# Secret for X2A credentials (AWS Bedrock and GitHub)
+# Secret for X2A system credentials
+# These are shared across all jobs and users
 apiVersion: v1
 kind: Secret
 metadata:
   name: x2a-secrets
-  namespace: x2a
+  namespace: rhdh
   labels:
     app: x2a
 type: Opaque
 stringData:
-  # AWS Bedrock credentials for LLM access
-  # Replace with your actual values before applying
-  aws-region: "REPLACE_WITH_YOUR_AWS_REGION"  # e.g., us-east-1
-  aws-bearer-token: "REPLACE_WITH_YOUR_AWS_BEARER_TOKEN"  # Your AWS bearer token for Bedrock
+  # LLM Configuration
+  llm-model: "meta/llama-3.3-70b-instruct-maas"
+  openai-api-base: "https://us-central1-aiplatform.googleapis.com/v1/projects/rhdh-orchestrator-ai/locations/us-central1/endpoints/openapi"
+  vertexai-project: "rhdh-orchestrator-ai"
+  log-level: "DEBUG"
+  langchain-debug: "FALSE"
+  recursion-limit: "900"
+  max-export-attempts: "80"
 
   # GitHub token for publishing (optional, only needed for publish phase)
-  # Uncomment and set if using the publish phase
-  # github-token: "REPLACE_WITH_YOUR_GITHUB_TOKEN"
+  github-token: "REPLACE_WITH_YOUR_GITHUB_TOKEN"
+
+  # AAP Integration
+  aap-controller-url: "https://aap-aap.apps.cluster-fw6zz-1.dynamic.redhatworkshops.io/"
+  aap-org-name: "Default"
+
+  # AAP Auth - Option A: Basic Auth
+  aap-username: "admin"
+  aap-password: "REPLACE_WITH_YOUR_AAP_PASSWORD"
+
+  # AAP Auth - Option B: Token Auth (leave empty if using basic auth)
+  aap-oauth-token: ""
+
+  # AAP TLS Configuration
+  # If using self-signed cert, provide the CA bundle content (PEM format)
+  aap-ca-bundle: ""
+  aap-verify-ssl: "true"

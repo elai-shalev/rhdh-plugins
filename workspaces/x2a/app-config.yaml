@@ -46,4 +46,5 @@ kubernetes:
 # X2A plugin configuration
 x2a:
   # Namespace where X2A jobs and resources will be created
-  namespace: x2a
+  # This should match the RHDH namespace
+  namespace: rhdh

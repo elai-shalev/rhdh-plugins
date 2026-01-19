@@ -122,6 +122,36 @@ export interface JobCreateRequest {
    * GitHub owner for publishing (for publish phase)
    */
   githubOwner?: string;
+
+  /**
+   * GitHub branch for publishing (for publish phase, default: 'test_test_1')
+   */
+  githubBranch?: string;
+
+  /**
+   * Skip git operations (for publish phase)
+   */
+  skipGit?: boolean;
+
+  /**
+   * Base path for deployment (for publish phase)
+   */
+  basePath?: string;
+
+  /**
+   * Path to collections YAML file (for publish phase)
+   */
+  collectionsFile?: string;
+
+  /**
+   * Path to inventory YAML file (for publish phase)
+   */
+  inventoryFile?: string;
+
+  /**
+   * Source role paths (for publish phase)
+   */
+  sourcePaths?: string[];
 }
 
 /**

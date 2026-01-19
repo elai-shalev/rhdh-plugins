@@ -76,7 +76,7 @@ export class JobsService {
     this.batchApi = this.kc.makeApiClient(k8s.BatchV1Api);
 
     // Configuration
-    this.namespace = config.getOptionalString('x2a.namespace') || 'x2a';
+    this.namespace = config.getOptionalString('x2a.namespace') || 'rhdh';
     this.image = 'quay.io/x2ansible/x2a-convertor:latest';
 
     this.logger.info(
@@ -117,25 +117,190 @@ export class JobsService {
                 command: ['/bin/sh', '-c'],
                 args: [command],
                 env: [
+                  // System Configuration
                   {
-                    name: 'LLM_MODEL',
-                    value: 'anthropic.claude-3-7-sonnet-20250219-v1:0',
+                    name: 'HOME',
+                    value: '/tmp',
                   },
                   {
-                    name: 'AWS_REGION',
+                    name: 'UV_CACHE_DIR',
+                    value: '/tmp/.uv-cache',
+                  },
+                  // LLM Configuration
+                  {
+                    name: 'LLM_MODEL',
                     valueFrom: {
                       secretKeyRef: {
                         name: 'x2a-secrets',
-                        key: 'aws-region',
+                        key: 'llm-model',
                       },
                     },
                   },
                   {
-                    name: 'AWS_BEARER_TOKEN_BEDROCK',
+                    name: 'OPENAI_API_BASE',
                     valueFrom: {
                       secretKeyRef: {
                         name: 'x2a-secrets',
-                        key: 'aws-bearer-token',
+                        key: 'openai-api-base',
+                      },
+                    },
+                  },
+                  {
+                    name: 'VERTEXAI_PROJECT',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'vertexai-project',
+                      },
+                    },
+                  },
+                  {
+                    name: 'LOG_LEVEL',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'log-level',
+                      },
+                    },
+                  },
+                  {
+                    name: 'LANGCHAIN_DEBUG',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'langchain-debug',
+                      },
+                    },
+                  },
+                  {
+                    name: 'RECURSION_LIMIT',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'recursion-limit',
+                      },
+                    },
+                  },
+                  {
+                    name: 'MAX_EXPORT_ATTEMPTS',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'max-export-attempts',
+                      },
+                    },
+                  },
+                  // GitHub Configuration
+                  {
+                    name: 'GITHUB_TOKEN',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'github-token',
+                        optional: true,
+                      },
+                    },
+                  },
+                  // AAP Configuration
+                  {
+                    name: 'AAP_CONTROLLER_URL',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'aap-controller-url',
+                      },
+                    },
+                  },
+                  {
+                    name: 'AAP_ORG_NAME',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'aap-org-name',
+                      },
+                    },
+                  },
+                  {
+                    name: 'AAP_USERNAME',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'aap-username',
+                      },
+                    },
+                  },
+                  {
+                    name: 'AAP_PASSWORD',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'aap-password',
+                      },
+                    },
+                  },
+                  {
+                    name: 'AAP_OAUTH_TOKEN',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'aap-oauth-token',
+                        optional: true,
+                      },
+                    },
+                  },
+                  {
+                    name: 'AAP_CA_BUNDLE',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'aap-ca-bundle',
+                        optional: true,
+                      },
+                    },
+                  },
+                  {
+                    name: 'AAP_VERIFY_SSL',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'aap-verify-ssl',
+                      },
+                    },
+                  },
+                  // Git Configuration (for publish phase)
+                  {
+                    name: 'GIT_AUTHOR_NAME',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'git-author-name',
+                      },
+                    },
+                  },
+                  {
+                    name: 'GIT_AUTHOR_EMAIL',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'git-author-email',
+                      },
+                    },
+                  },
+                  {
+                    name: 'GIT_COMMITTER_NAME',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'git-author-name',
+                      },
+                    },
+                  },
+                  {
+                    name: 'GIT_COMMITTER_EMAIL',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'git-author-email',
                       },
                     },
                   },
@@ -184,7 +349,7 @@ export class JobsService {
    * Build the command for the migration phase
    */
   private buildCommand(req: JobCreateRequest): string {
-    const cmd = 'python -m app';
+    const cmd = 'uv run python app.py';
     const dir = '/app/source';
 
     switch (req.phase) {
@@ -197,8 +362,31 @@ export class JobsService {
       case 'migrate':
         return `${cmd} migrate --source-dir ${dir} --source-technology ${req.sourceTechnology || 'Chef'} --high-level-migration-plan migration-plan.md --module-migration-plan migration-plan-${req.moduleName}.md "Convert ${req.moduleName}"`;
 
-      case 'publish':
-        return `${cmd} publish "${req.moduleName}" --source-paths ${dir}/ansible/roles/${req.moduleName} --github-owner ${req.githubOwner} --github-branch main`;
+      case 'publish': {
+        const sourcePaths = req.sourcePaths?.join(' --source-paths ') || `${dir}/ansible/roles/${req.moduleName}`;
+        const githubBranch = req.githubBranch || 'test_test_1';
+        let publishCmd = `${cmd} publish "${req.moduleName}" --source-paths ${sourcePaths} --github-owner ${req.githubOwner} --github-branch ${githubBranch}`;
+
+        if (req.skipGit) {
+          publishCmd += ' --skip-git';
+        }
+        if (req.basePath) {
+          publishCmd += ` --base-path ${req.basePath}`;
+        }
+        if (req.collectionsFile) {
+          publishCmd += ` --collections-file ${req.collectionsFile}`;
+        }
+        if (req.inventoryFile) {
+          publishCmd += ` --inventory-file ${req.inventoryFile}`;
+        }
+
+        // Workaround: Configure git to use GITHUB_TOKEN for HTTPS authentication
+        // This rewrites all https://github.com/ URLs to include the token
+        // Format: https://${GITHUB_TOKEN}@github.com/
+        const gitSetup = 'git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"';
+
+        return `${gitSetup} && ${publishCmd}`;
+      }
 
       default:
         throw new Error(`Unknown phase: ${req.phase}`);
