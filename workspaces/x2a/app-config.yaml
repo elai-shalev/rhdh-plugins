@@ -6,8 +6,9 @@ organization:
   name: Red Hat Developer Hub
 
 backend:
-  baseUrl: http://localhost:7007
+  baseUrl: http://10.50.15.194:7007
   listen:
+    host: 0.0.0.0
     port: 7007
   csp:
     connect-src: ["'self'", 'http:', 'https:']

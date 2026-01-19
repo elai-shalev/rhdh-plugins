@@ -84,7 +84,7 @@ export class JobsService {
 
     // Callback configuration
     const backendUrl = config.getOptionalString('backend.baseUrl') || 'http://localhost:7007';
-    this.callbackUrl = `${backendUrl}/api/x2a/collectArtifacts`;
+    this.callbackUrl = `${backendUrl}/x2a/collectArtifacts`;
     this.callbackSecret = config.getOptionalString('x2a.callbackSecret');
 
     this.logger.info(
@@ -176,6 +176,15 @@ export class JobsService {
                       secretKeyRef: {
                         name: 'x2a-secrets',
                         key: 'vertexai-project',
+                      },
+                    },
+                  },
+                  {
+                    name: 'OPENAI_API_KEY',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: 'x2a-secrets',
+                        key: 'openai-api-key',
                       },
                     },
                   },
