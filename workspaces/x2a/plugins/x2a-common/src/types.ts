@@ -178,3 +178,113 @@ export interface JobCreateResponse {
    */
   created: boolean;
 }
+
+/**
+ * Artifact references for different migration phases
+ */
+export interface ArtifactReferences {
+  /**
+   * Path to migration plan file (for init phase)
+   */
+  migrationPlan?: string;
+
+  /**
+   * Path to module migration plan file (for analyze phase)
+   */
+  moduleMigrationPlan?: string;
+
+  /**
+   * Path to Ansible sources (for migrate phase)
+   */
+  ansibleSources?: string;
+
+  /**
+   * GitOps repository URL (for publish phase)
+   */
+  gitopsRepo?: string;
+}
+
+/**
+ * Substatus information for job completion
+ */
+export interface Substatus {
+  /**
+   * Status key identifier
+   */
+  key: string;
+
+  /**
+   * Optional status message
+   */
+  message?: string;
+}
+
+/**
+ * Request to collect artifacts after job completion
+ */
+export interface CollectArtifactsRequest {
+  /**
+   * Name of the completed Kubernetes job
+   */
+  jobName: string;
+
+  /**
+   * Migration phase that was executed
+   */
+  phase: MigrationPhase;
+
+  /**
+   * Job completion status
+   */
+  status: 'success' | 'failure';
+
+  /**
+   * Optional detailed substatus
+   */
+  substatus?: Substatus;
+
+  /**
+   * Migration identifier (optional)
+   */
+  migrationId?: string;
+
+  /**
+   * Module identifier (not used for init phase)
+   */
+  moduleId?: string;
+
+  /**
+   * References to artifacts created by the job
+   */
+  artifactReferences?: ArtifactReferences;
+
+  /**
+   * Timestamp when the job completed
+   */
+  timestamp?: string;
+
+  /**
+   * Optional job logs or additional data
+   */
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Response from collecting artifacts
+ */
+export interface CollectArtifactsResponse {
+  /**
+   * Whether the artifacts were successfully collected
+   */
+  success: boolean;
+
+  /**
+   * Message describing the result
+   */
+  message: string;
+
+  /**
+   * Timestamp when artifacts were collected
+   */
+  collectedAt: string;
+}

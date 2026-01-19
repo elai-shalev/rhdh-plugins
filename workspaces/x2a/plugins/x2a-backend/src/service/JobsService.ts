@@ -31,6 +31,9 @@ export class JobsService {
   private readonly namespace: string;
   private readonly image: string;
 
+  private readonly callbackUrl: string;
+  private readonly callbackSecret?: string;
+
   constructor(
     config: Config,
     private readonly logger: LoggerService,
@@ -79,8 +82,13 @@ export class JobsService {
     this.namespace = config.getOptionalString('x2a.namespace') || 'rhdh';
     this.image = 'quay.io/x2ansible/x2a-convertor:latest';
 
+    // Callback configuration
+    const backendUrl = config.getOptionalString('backend.baseUrl') || 'http://localhost:7007';
+    this.callbackUrl = `${backendUrl}/api/x2a/collectArtifacts`;
+    this.callbackSecret = config.getOptionalString('x2a.callbackSecret');
+
     this.logger.info(
-      `JobsService initialized: namespace=${this.namespace}, image=${this.image}`,
+      `JobsService initialized: namespace=${this.namespace}, image=${this.image}, callbackUrl=${this.callbackUrl}`,
     );
   }
 
@@ -125,6 +133,23 @@ export class JobsService {
                   {
                     name: 'UV_CACHE_DIR',
                     value: '/tmp/.uv-cache',
+                  },
+                  // Callback Configuration
+                  {
+                    name: 'CALLBACK_URL',
+                    value: this.callbackUrl,
+                  },
+                  {
+                    name: 'CALLBACK_SECRET',
+                    value: this.callbackSecret || '',
+                  },
+                  {
+                    name: 'JOB_NAME',
+                    value: jobName,
+                  },
+                  {
+                    name: 'MIGRATION_PHASE',
+                    value: request.phase,
                   },
                   // LLM Configuration
                   {
@@ -346,21 +371,85 @@ export class JobsService {
   }
 
   /**
+   * Wrap a command with callback logic
+   * This wrapper executes the actual command, then calls the callback endpoint
+   * with job results regardless of success or failure
+   */
+  private wrapCommandWithCallback(actualCommand: string): string {
+    // Build callback payload with proper JSON escaping
+    const callbackScript = `
+# Execute the actual migration command
+${actualCommand}
+EXIT_CODE=$?
+
+# Determine status based on exit code
+if [ $EXIT_CODE -eq 0 ]; then
+  STATUS="success"
+else
+  STATUS="failure"
+fi
+
+# Build callback payload
+TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+CALLBACK_PAYLOAD=$(cat <<EOF
+{
+  "jobName": "$JOB_NAME",
+  "phase": "$MIGRATION_PHASE",
+  "status": "$STATUS",
+  "timestamp": "$TIMESTAMP"
+}
+EOF
+)
+
+# Call callback endpoint (ignore failures to avoid masking original exit code)
+if [ -n "$CALLBACK_URL" ]; then
+  echo "Calling callback: $CALLBACK_URL"
+  if [ -n "$CALLBACK_SECRET" ]; then
+    curl -X POST "$CALLBACK_URL" \\
+      -H "Content-Type: application/json" \\
+      -H "X-Callback-Secret: $CALLBACK_SECRET" \\
+      -d "$CALLBACK_PAYLOAD" \\
+      --max-time 10 \\
+      --silent \\
+      --show-error || echo "Warning: Callback failed but continuing..."
+  else
+    curl -X POST "$CALLBACK_URL" \\
+      -H "Content-Type: application/json" \\
+      -d "$CALLBACK_PAYLOAD" \\
+      --max-time 10 \\
+      --silent \\
+      --show-error || echo "Warning: Callback failed but continuing..."
+  fi
+fi
+
+# Exit with the original command's exit code
+exit $EXIT_CODE
+`;
+
+    return callbackScript.trim();
+  }
+
+  /**
    * Build the command for the migration phase
    */
   private buildCommand(req: JobCreateRequest): string {
     const cmd = 'uv run python app.py';
     const dir = '/app/source';
 
+    let actualCommand: string;
+
     switch (req.phase) {
       case 'init':
-        return `${cmd} init --source-dir ${dir} "${req.description}"`;
+        actualCommand = `${cmd} init --source-dir ${dir} "${req.description}"`;
+        break;
 
       case 'analyze':
-        return `${cmd} analyze "${req.description}" --source-dir ${dir}`;
+        actualCommand = `${cmd} analyze "${req.description}" --source-dir ${dir}`;
+        break;
 
       case 'migrate':
-        return `${cmd} migrate --source-dir ${dir} --source-technology ${req.sourceTechnology || 'Chef'} --high-level-migration-plan migration-plan.md --module-migration-plan migration-plan-${req.moduleName}.md "Convert ${req.moduleName}"`;
+        actualCommand = `${cmd} migrate --source-dir ${dir} --source-technology ${req.sourceTechnology || 'Chef'} --high-level-migration-plan migration-plan.md --module-migration-plan migration-plan-${req.moduleName}.md "Convert ${req.moduleName}"`;
+        break;
 
       case 'publish': {
         const sourcePaths = req.sourcePaths?.join(' --source-paths ') || `${dir}/ansible/roles/${req.moduleName}`;
@@ -385,11 +474,15 @@ export class JobsService {
         // Format: https://${GITHUB_TOKEN}@github.com/
         const gitSetup = 'git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"';
 
-        return `${gitSetup} && ${publishCmd}`;
+        actualCommand = `${gitSetup} && ${publishCmd}`;
+        break;
       }
 
       default:
         throw new Error(`Unknown phase: ${req.phase}`);
     }
+
+    // Wrap the command with callback logic
+    return this.wrapCommandWithCallback(actualCommand);
   }
 }

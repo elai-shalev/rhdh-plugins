@@ -23,9 +23,12 @@ import type {
   X2AErrorResponse,
   JobCreateRequest,
   JobCreateResponse,
+  CollectArtifactsRequest,
+  CollectArtifactsResponse,
 } from '@red-hat-developer-hub/backstage-plugin-x2a-common';
 import { KubernetesService } from './KubernetesService';
 import { JobsService } from './JobsService';
+import { ArtifactCollectorService } from './ArtifactCollectorService';
 
 export interface RouterOptions {
   logger: LoggerService;
@@ -42,6 +45,7 @@ export async function createRouter(
 
   const k8sService = new KubernetesService(config, logger);
   const jobsService = new JobsService(config, logger);
+  const artifactCollectorService = new ArtifactCollectorService(config, logger);
 
   const router = Router();
   router.use(express.json());
@@ -139,6 +143,56 @@ export async function createRouter(
 
       const errorResponse: X2AErrorResponse = {
         error: 'Failed to create job',
+        details: error.message,
+      };
+
+      return response.status(500).json(errorResponse);
+    }
+  });
+
+  // Collect artifacts from completed job (callback endpoint)
+  router.post('/collectArtifacts', async (request, response) => {
+    try {
+      const artifactRequest: CollectArtifactsRequest = request.body;
+
+      // Validate required fields
+      if (!artifactRequest.jobName || !artifactRequest.phase || !artifactRequest.status) {
+        const errorResponse: X2AErrorResponse = {
+          error: 'Missing required fields: jobName, phase, status',
+        };
+        return response.status(400).json(errorResponse);
+      }
+
+      // Optional: Validate callback secret for authentication
+      const expectedSecret = config.getOptionalString('x2a.callbackSecret');
+      if (expectedSecret) {
+        const providedSecret = request.headers['x-callback-secret'];
+        if (providedSecret !== expectedSecret) {
+          const errorResponse: X2AErrorResponse = {
+            error: 'Invalid callback secret',
+          };
+          return response.status(401).json(errorResponse);
+        }
+      }
+
+      logger.info(
+        `Collecting artifacts for job: ${artifactRequest.jobName}, phase: ${artifactRequest.phase}, status: ${artifactRequest.status}`,
+      );
+
+      await artifactCollectorService.collectArtifacts(artifactRequest);
+
+      const collectResponse: CollectArtifactsResponse = {
+        success: true,
+        message: `Artifacts collected for job ${artifactRequest.jobName}`,
+        collectedAt: new Date().toISOString(),
+      };
+
+      return response.status(200).json(collectResponse);
+    } catch (error: any) {
+      logger.error(`Error collecting artifacts: ${error.message}`);
+
+      const errorResponse: X2AErrorResponse = {
+        error: 'Failed to collect artifacts',
         details: error.message,
       };
 

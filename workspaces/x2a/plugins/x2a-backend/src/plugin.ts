@@ -52,6 +52,12 @@ export const x2aPlugin = createBackendPlugin({
           allow: 'unauthenticated',
         });
 
+        // Allow unauthenticated access to collectArtifacts callback endpoint
+        http.addAuthPolicy({
+          path: '/collectArtifacts',
+          allow: 'unauthenticated',
+        });
+
         logger.info('X2A backend plugin initialized successfully');
       },
     });
