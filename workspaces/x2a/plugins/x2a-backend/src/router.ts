@@ -323,6 +323,22 @@ export async function createRouter({
         throw new NotFoundError(`Project "${projectId}" not found.`);
       }
 
+      // Check for existing running init job
+      const existingJobs = await x2aDatabase.listJobsForProject({ projectId });
+      const hasActiveInitJob = existingJobs.some(
+        job =>
+          job.phase === 'init' && ['pending', 'running'].includes(job.status),
+      );
+
+      if (hasActiveInitJob) {
+        return res.status(409).json({
+          error: 'JobAlreadyRunning',
+          message: 'An init job is already running for this project',
+          details:
+            'Please wait for the current job to complete or cancel it before starting a new one',
+        });
+      }
+
       // Generate callback token and create job record
       const callbackToken = randomUUID();
       const job = await x2aDatabase.createJob({
@@ -342,6 +358,7 @@ export async function createRouter({
         jobId: job.id,
         projectId,
         projectName: project.name,
+        projectAbbrev: project.abbreviation,
         phase: 'init',
         user: userRef,
         callbackToken,
@@ -367,7 +384,7 @@ export async function createRouter({
         `Init job created: jobId=${job.id}, k8sJobName=${k8sJobName}`,
       );
 
-      res.json({ status: 'pending', jobId: job.id } as any);
+      return res.json({ status: 'pending', jobId: job.id } as any);
     },
   );
 
@@ -548,6 +565,28 @@ export async function createRouter({
         );
       }
 
+      // Check for existing running job for this module
+      const existingJobs = await x2aDatabase.listJobsForModule({
+        projectId,
+        moduleId,
+      });
+      const hasActiveJob = existingJobs.some(job =>
+        ['pending', 'running'].includes(job.status),
+      );
+
+      if (hasActiveJob) {
+        const activeJob = existingJobs.find(job =>
+          ['pending', 'running'].includes(job.status),
+        );
+        return res.status(409).json({
+          error: 'JobAlreadyRunning',
+          message: `A ${activeJob!.phase} job is already running for this module`,
+          details: 'Please wait for the current job to complete or cancel it',
+          activeJobId: activeJob!.id,
+          activeJobPhase: activeJob!.phase,
+        });
+      }
+
       // Generate callback token and create job record
       const callbackToken = randomUUID();
       const job = await x2aDatabase.createJob({
@@ -566,6 +605,7 @@ export async function createRouter({
         jobId: job.id,
         projectId,
         projectName: project.name,
+        projectAbbrev: project.abbreviation,
         phase,
         user: userRef,
         callbackToken,
@@ -593,7 +633,7 @@ export async function createRouter({
         `${phase} job created: jobId=${job.id}, moduleId=${moduleId}, k8sJobName=${k8sJobName}`,
       );
 
-      res.json({ status: 'pending', jobId: job.id } as any);
+      return res.json({ status: 'pending', jobId: job.id } as any);
     },
   );
 
@@ -644,24 +684,20 @@ export async function createRouter({
       throw new NotFoundError(`Module does not belong to project`);
     }
 
-    // Get latest job for module filtered by requested phase
-    const jobs = await x2aDatabase.listJobs({
+    // Get jobs for module and filter by requested phase
+    const allJobs = await x2aDatabase.listJobsForModule({
+      projectId,
       moduleId,
-      phase,
     });
+
+    // Filter by phase
+    const jobs = allJobs.filter(job => job.phase === phase);
 
     if (jobs.length === 0) {
       throw new NotFoundError(`No jobs found for module with phase '${phase}'`);
     }
 
-    const latestJob = jobs[0]; // Already sorted by started_at DESC in listJobs
-
-    // Validate the latest job phase matches requested phase (sanity check)
-    if (latestJob.phase !== phase) {
-      throw new InputError(
-        `Latest job phase '${latestJob.phase}' does not match requested phase '${phase}'`,
-      );
-    }
+    const latestJob = jobs[0]; // Already sorted by started_at DESC in listJobsForModule
 
     // If job is finished, return logs from database
     if (latestJob.status === 'success' || latestJob.status === 'error') {
