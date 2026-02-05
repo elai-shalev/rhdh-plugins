@@ -24,6 +24,7 @@ import {
   HttpAuthService,
   LoggerService,
   PermissionsService,
+  RootConfigService,
 } from '@backstage/backend-plugin-api';
 import { InputError, NotAllowedError, NotFoundError } from '@backstage/errors';
 import {
@@ -130,6 +131,7 @@ export async function createRouter({
   kubeService,
   logger,
   permissionsSvc,
+  config,
 }: {
   httpAuth: HttpAuthService;
   x2aDatabase: typeof x2aDatabaseServiceRef.T;
@@ -137,6 +139,7 @@ export async function createRouter({
   discoveryApi: DiscoveryService;
   logger: LoggerService;
   permissionsSvc: PermissionsService;
+  config: RootConfigService;
 }): Promise<express.Router> {
   const router = await createOpenApiRouter();
 
@@ -285,12 +288,16 @@ export async function createRouter({
 
       // Validate request body
       const runRequestSchema = z.object({
-        sourceRepoAuth: z.object({
-          token: z.string(),
-        }),
-        targetRepoAuth: z.object({
-          token: z.string(),
-        }),
+        sourceRepoAuth: z
+          .object({
+            token: z.string(),
+          })
+          .optional(),
+        targetRepoAuth: z
+          .object({
+            token: z.string(),
+          })
+          .optional(),
         aapCredentials: z
           .object({
             url: z.string(),
@@ -309,6 +316,25 @@ export async function createRouter({
       }
       const { sourceRepoAuth, targetRepoAuth, aapCredentials, userPrompt } =
         parsedBody.data;
+
+      // Get tokens with config-based fallback
+      const sourceToken =
+        sourceRepoAuth?.token ??
+        config.getOptionalString('x2a.git.sourceRepo.token');
+      const targetToken =
+        targetRepoAuth?.token ??
+        config.getOptionalString('x2a.git.targetRepo.token');
+
+      if (!sourceToken) {
+        throw new InputError(
+          'Source repository token is required. Provide it in the request or configure x2a.git.sourceRepo.token.',
+        );
+      }
+      if (!targetToken) {
+        throw new InputError(
+          'Target repository token is required. Provide it in the request or configure x2a.git.targetRepo.token.',
+        );
+      }
 
       // Get user reference safely
       const credentials = await httpAuth.credentials(req, { allow: ['user'] });
@@ -366,12 +392,12 @@ export async function createRouter({
         sourceRepo: {
           url: project.sourceRepoUrl,
           branch: project.sourceRepoBranch,
-          token: sourceRepoAuth.token,
+          token: sourceToken,
         },
         targetRepo: {
           url: project.targetRepoUrl,
           branch: project.targetRepoBranch,
-          token: targetRepoAuth.token,
+          token: targetToken,
         },
         aapCredentials,
         userPrompt,
@@ -516,8 +542,8 @@ export async function createRouter({
       // Validate request body
       const runModuleRequestSchema = z.object({
         phase: z.enum(['analyze', 'migrate', 'publish']),
-        sourceRepoToken: z.string(),
-        targetRepoToken: z.string(),
+        sourceRepoToken: z.string().optional(),
+        targetRepoToken: z.string().optional(),
         aapCredentials: z
           .object({
             url: z.string(),
@@ -538,11 +564,30 @@ export async function createRouter({
       }
       const {
         phase,
-        sourceRepoToken,
-        targetRepoToken,
+        sourceRepoToken: sourceRepoTokenFromRequest,
+        targetRepoToken: targetRepoTokenFromRequest,
         aapCredentials,
         userPrompt,
       } = parsedBody.data;
+
+      // Get tokens with config-based fallback
+      const sourceRepoToken =
+        sourceRepoTokenFromRequest ??
+        config.getOptionalString('x2a.git.sourceRepo.token');
+      const targetRepoToken =
+        targetRepoTokenFromRequest ??
+        config.getOptionalString('x2a.git.targetRepo.token');
+
+      if (!sourceRepoToken) {
+        throw new InputError(
+          'Source repository token is required. Provide it in the request or configure x2a.git.sourceRepo.token.',
+        );
+      }
+      if (!targetRepoToken) {
+        throw new InputError(
+          'Target repository token is required. Provide it in the request or configure x2a.git.targetRepo.token.',
+        );
+      }
 
       // Get user reference safely
       const credentials = await httpAuth.credentials(req, { allow: ['user'] });
@@ -598,9 +643,9 @@ export async function createRouter({
       });
 
       // Create Kubernetes job (will create both project and job secrets)
-      // Use HTTP for in-cluster service-to-service communication
-      // Jobs call back to Backstage within the same cluster
-      const callbackUrl = `http://${req.get('host')}/api/x2a/projects/${projectId}/modules/${moduleId}/collectArtifacts`;
+      // Use discoveryApi for consistent URL resolution
+      const moduleBaseUrl = await discoveryApi.getBaseUrl('x2a');
+      const callbackUrl = `${moduleBaseUrl}/projects/${projectId}/modules/${moduleId}/collectArtifacts`;
       const { k8sJobName } = await kubeService.createJob({
         jobId: job.id,
         projectId,
