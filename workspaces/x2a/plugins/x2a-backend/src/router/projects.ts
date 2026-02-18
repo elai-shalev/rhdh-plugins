@@ -167,6 +167,25 @@ export function registerProjectRoutes(
     const endpoint = 'DELETE /projects/:projectId';
     const projectId = req.params.projectId;
     logger.info(`${endpoint} request received: projectId=${projectId}`);
+
+    // Cancel any active k8s jobs before deleting DB records
+    const jobs = await x2aDatabase.listJobsForProject({ projectId });
+    const activeJobs = jobs.filter(
+      job => ['pending', 'running'].includes(job.status) && job.k8sJobName,
+    );
+    await Promise.all(
+      activeJobs.map(job => {
+        logger.info(
+          `Cancelling k8s job ${job.k8sJobName} for project ${projectId}`,
+        );
+        return kubeService.deleteJob(job.k8sJobName!).catch(err => {
+          logger.warn(
+            `Failed to cancel k8s job ${job.k8sJobName}: ${err.message}`,
+          );
+        });
+      }),
+    );
+
     const deletedCount = await x2aDatabase.deleteProject(
       { projectId },
       {
@@ -316,14 +335,18 @@ export function registerProjectRoutes(
         userPrompt,
       });
 
-      // Update job with k8s job name
-      await x2aDatabase.updateJob({ id: job.id, k8sJobName });
+      // Update job with k8s job name and mark as running
+      await x2aDatabase.updateJob({
+        id: job.id,
+        k8sJobName,
+        status: 'running',
+      });
 
       logger.info(
         `Init job created: jobId=${job.id}, k8sJobName=${k8sJobName}`,
       );
 
-      return res.json({ status: 'pending', jobId: job.id } as any);
+      return res.json({ status: 'running', jobId: job.id } as any);
     },
   );
 }
