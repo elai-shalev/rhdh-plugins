@@ -335,17 +335,18 @@ export function registerProjectRoutes(
         userPrompt,
       });
 
-      // Update job with k8s job name
+      // Update job with k8s job name and mark as running
       await x2aDatabase.updateJob({
         id: job.id,
         k8sJobName,
+        status: 'running',
       });
 
       logger.info(
         `Init job created: jobId=${job.id}, k8sJobName=${k8sJobName}`,
       );
 
-      return res.json({ status: 'pending', jobId: job.id } as any);
+      return res.json({ status: 'running', jobId: job.id } as any);
     },
   );
 }
