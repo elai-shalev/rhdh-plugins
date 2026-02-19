@@ -117,6 +117,8 @@ const x2aPluginTranslationIt = createTranslationMessages({
       'Il modulo è già stato pubblicato. Riavvia la pubblicazione per aggiornare il repository di destinazione.',
     'modulePage.phases.rerunPublish':
       'Ripubblica nel repository di destinazione',
+    'modulePage.phases.viewLog': 'Visualizza log',
+    'modulePage.phases.hideLog': 'Nascondi log',
   },
 });
 
